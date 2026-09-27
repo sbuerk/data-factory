@@ -1,0 +1,24 @@
+##
+# A translation of a page the scenario does not write, written by
+# "SiteConfigurationSeederTest" into an installation that already has page 20
+# ("ExistingUncoveredSiteRoot.csv") on the page tree root, without a site.
+#
+# "l10n_parent" is a record value like any other, so a scenario can name an
+# original it does not declare. The translation lands on the page tree root and
+# its original is covered by no site. Neither is the run's to report.
+##
+entitySettings:
+  page:
+    isNode: true
+    tableName: 'pages'
+    parentColumnName: 'pid'
+    columnNames:
+      language: 'sys_language_uid'
+    defaultValues:
+      pid: 0
+      hidden: 0
+      doktype: 1
+
+entities:
+  page:
+    - self: {id: 740, title: 'DE: An existing site root', language: 1, l10n_parent: 20, slug: '/'}
