@@ -1,0 +1,5 @@
+<!-- A license header kept after the XML declaration was stripped -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" width="320" height="180" onload="alert(1)">
+  <script>alert(2)</script>
+  <rect width="320" height="180" fill="#d7d7d7"/>
+</svg>

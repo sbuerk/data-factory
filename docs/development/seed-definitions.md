@@ -670,7 +670,9 @@ files:
 A `folder` that does not exist is created. The file is copied into the storage
 through the storage API, which is what indexes it - a file copied into
 `fileadmin/` with `cp` exists on disk and does not exist for TYPO3. An existing
-file of the same name is **replaced**.
+file of the same name is **replaced**. The source itself is never written to:
+the storage is handed a temporary copy, see
+[The file pass](../architecture/seeding.md#the-file-pass).
 
 The key set is closed, like the set level and a site: a misspelled `foldr:` is
 refused with `1787256303` rather than silently putting the file in the storage
