@@ -994,6 +994,11 @@ site root ends up covered by no site configuration at all, the import warns and
 names the pages by uid. A page tree without a site is a frontend that cannot
 render, and nothing else would say so.
 
+The warning never names a translation. A translated page is reachable through
+the site of the page it translates, in the languages that site declares, so a
+site root with translations that no site covers is named once, by its own uid,
+when the import wrote that page.
+
 ..  _configuration-complete-set:
 
 A complete seed set

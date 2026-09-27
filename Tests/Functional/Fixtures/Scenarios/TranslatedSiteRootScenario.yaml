@@ -1,0 +1,38 @@
+##
+# A site root with translations, written by "SiteConfigurationSeederTest".
+#
+# Both conditions of a site root are met by a translation here, and neither
+# makes it one: the translations of "Home" are "pages" rows of their own on the
+# page tree root, and every translation carries the "is_siteroot" of its
+# original. It is "l10n_mode" "exclude", so DataHandler copies it. They are
+# what the uncovered-root report has to pass over, while it keeps reporting the
+# two pages they translate.
+#
+# "nodeColumnName" is declared so a translated page is positioned next to its
+# original: without it, the translation of "About" would fall back to the "pid"
+# of "defaultValues" and land on the page tree root as well.
+##
+entitySettings:
+  page:
+    isNode: true
+    tableName: 'pages'
+    parentColumnName: 'pid'
+    nodeColumnName: 'pid'
+    languageColumnNames: ['l10n_parent', 'l10n_source']
+    columnNames:
+      language: 'sys_language_uid'
+    defaultValues:
+      pid: 0
+      hidden: 0
+      doktype: 1
+
+entities:
+  page:
+    - self: {id: 720, title: 'EN: Home', slug: '/', is_siteroot: 1}
+      languageVariants:
+        - self: {id: 721, title: 'DE: Home', language: 1, slug: '/'}
+        - self: {id: 722, title: 'FR: Home', language: 2, slug: '/'}
+      children:
+        - self: {id: 730, title: 'EN: About', slug: '/about', is_siteroot: 1}
+          languageVariants:
+            - self: {id: 731, title: 'DE: About', language: 1, slug: '/about'}

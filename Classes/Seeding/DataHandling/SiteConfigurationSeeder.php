@@ -144,6 +144,24 @@ final readonly class SiteConfigurationSeeder
         PageRepository::DOKTYPE_SHORTCUT,
     ];
 
+    /**
+     * The translation pointer of `pages`, which `CreateSiteConfiguration`
+     * reads by this literal name to leave out every page that translates
+     * another one.
+     *
+     * A translated page is a `pages` row of its own on the `pid` of its
+     * original, and `is_siteroot` is `l10n_mode` `exclude`, so `DataHandler`
+     * copies it from the original. A translation therefore meets the page
+     * tree root and `is_siteroot` conditions whenever its original does. It
+     * is no site root: the site of a translation is the site of its original,
+     * and `SiteFinder::getSiteByPageId()` asked with the uid of the
+     * translation of a site's root page does not find that site.
+     *
+     * The hook reads the same literal field on 13.4 and 14.3
+     * (`CreateSiteConfiguration::processDatamap_afterDatabaseOperations()`).
+     */
+    private const TRANSLATION_POINTER_FIELD = 'l10n_parent';
+
     public function __construct(
         private SiteWriter $siteWriter,
         private SiteConfiguration $siteConfiguration,
@@ -404,9 +422,16 @@ final readonly class SiteConfigurationSeeder
      *
      * "Site root" is the core's own definition, read back out of the database
      * rather than derived from the definition: a page on the page tree root or
-     * carrying `is_siteroot`, of a page type `CreateSiteConfiguration` would
-     * have acted on. Reading it back is what makes the answer true for the
-     * record that was actually written, defaults and all.
+     * carrying `is_siteroot` that translates no other page, of a page type
+     * `CreateSiteConfiguration` would have acted on. Reading it back is what
+     * makes the answer true for the record that was actually written, defaults
+     * and all.
+     *
+     * A translation is never reported, whether its original was seeded in the
+     * same run or existed before. Whether it is reachable is decided by its
+     * original and the languages of that page's site, so an uncovered seeded
+     * original is reported as itself, and an original the run did not write is
+     * not the run's to report.
      *
      * "Covered" is asked as `SiteFinder::getSiteByPageId()` and not as
      * `getSiteByRootPageId()`, because the question is whether a frontend can
@@ -462,6 +487,10 @@ final readonly class SiteConfigurationSeeder
                 $queryBuilder->expr()->in(
                     'doktype',
                     $queryBuilder->createNamedParameter(self::SITE_ROOT_PAGE_TYPES, Connection::PARAM_INT_ARRAY),
+                ),
+                $queryBuilder->expr()->eq(
+                    self::TRANSLATION_POINTER_FIELD,
+                    $queryBuilder->createNamedParameter(0, Connection::PARAM_INT),
                 ),
             )
             ->orderBy('uid')
