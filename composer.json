@@ -92,7 +92,7 @@
         "typo3/cms": {
             "extension-key": "data_factory",
             "web-dir": ".Build/Web",
-            "version": "1.0.1-dev",
+            "version": "1.0.1",
             "Package": {
                 "providesPackages": {}
             }
