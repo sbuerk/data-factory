@@ -771,6 +771,12 @@ exists on disk and does not exist for TYPO3. A missing target folder is created,
 an existing file of the same name is replaced, and the source file in the
 extension is left where it is.
 
+The source file is also left as it is. TYPO3 sanitizes an SVG while it is added
+to a storage, and it does so in the file it is given. An import therefore hands
+the storage a temporary copy of the source, so the stored SVG is sanitized and
+the one in the extension is not touched, whether it was committed in a site
+package or installed below :file:`vendor/`.
+
 Placing a file is one thing and attaching it to a record is another, and the
 second is what :ref:`references <configuration-references>` below does.
 

@@ -220,6 +220,28 @@ why `config.yml` carries a `references:` list rather than the scenario carrying 
 relation - see
 [File references](../development/seed-definitions.md#file-references).
 
+What the storage is handed is a **temporary copy** of the source, never the
+source itself. `ResourceStorage::addFile()` dispatches `BeforeFileAddedEvent`
+with the path it was given, and `Core\Resource\Security\SvgEventListener`
+sanitizes an SVG at that path in place, on an import replacing a stored file as
+much as on the first one. `addFile()` treats that path as a file it may consume,
+moving it by default. For a seed it is a file of the package shipping the set,
+so sanitizing it would leave a dirty working copy in a site package and a
+silently changed file below `vendor/`. The copy is made by
+`GeneralUtility::tempnam()` in the `transient/` directory of the var path and
+removed again in a `finally`.
+
+The copy carries the **extension** of the name the file is stored under, and
+that is not cosmetic. `SvgTypeCheck` decides by the extension of the path it is
+given, or else by the MIME type detected from the content, whether the file is
+sanitized. The resource consistency check `addFile()` runs after the listeners
+compares the MIME type detected from the content with the extension of the
+target name. Content detection takes an SVG that opens with a comment and no XML
+declaration for `text/html`. Such a file is sanitized only because of the
+extension, and it passes the check only because the sanitized output starts with
+an XML declaration. A copy without the extension would be left unsanitized and
+refused. `FileSeedingTest` covers that case with such a fixture.
+
 ## The file reference pass
 
 `FileReferenceSeeder` runs **after** the records, in a second `DataHandler` pass
