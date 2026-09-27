@@ -20,6 +20,7 @@ use Symfony\Component\Yaml\Yaml;
 use TYPO3\CMS\Core\Configuration\SiteConfiguration;
 use TYPO3\CMS\Core\Configuration\SiteWriter;
 use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Database\Connection;
 use TYPO3\CMS\Core\Database\ConnectionPool;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Site\SiteFinder;
@@ -165,6 +166,35 @@ final class SiteConfigurationSeederTest extends AbstractFunctionalTestCase
         $configuration = Yaml::parseFile($file);
 
         return $configuration;
+    }
+
+    /**
+     * Where a seeded page sits, which language it is in and which page it
+     * translates, and whether it is flagged as a site root.
+     *
+     * @return array{pid: int, sys_language_uid: int, l10n_parent: int, is_siteroot: int}
+     */
+    private function pageLocation(int $uid): array
+    {
+        $queryBuilder = $this->get(ConnectionPool::class)->getQueryBuilderForTable('pages');
+        $queryBuilder->getRestrictions()->removeAll();
+
+        $row = $queryBuilder
+            ->select('pid', 'sys_language_uid', 'l10n_parent', 'is_siteroot')
+            ->from('pages')
+            ->where(
+                $queryBuilder->expr()->eq('uid', $queryBuilder->createNamedParameter($uid, Connection::PARAM_INT)),
+            )
+            ->executeQuery()
+            ->fetchAssociative();
+        $this->assertIsArray($row, sprintf('Page %d was not written.', $uid));
+
+        return [
+            'pid' => (int)$row['pid'],
+            'sys_language_uid' => (int)$row['sys_language_uid'],
+            'l10n_parent' => (int)$row['l10n_parent'],
+            'is_siteroot' => (int)$row['is_siteroot'],
+        ];
     }
 
     /**
@@ -339,6 +369,97 @@ final class SiteConfigurationSeederTest extends AbstractFunctionalTestCase
         // The record was written and it does sit on the page tree root, so the
         // empty report below is about its doktype and nothing else.
         $this->assertSame([800], $seedResult->pageUids());
+        $this->assertSame([], $result->uncoveredSiteRoots);
+    }
+
+    /**
+     * The translations of a site root covered by a declared site are not
+     * reported: they are reachable through the site of their original, in the
+     * languages that site declares.
+     *
+     * The assertions before the last one are what make the empty report mean
+     * something. Every translation was written and carries the `is_siteroot`
+     * of its original, and the translations of the root page sit on the page
+     * tree root as well, which is every condition of a site root but one.
+     */
+    #[Test]
+    public function theTranslationsOfASiteRootCoveredByADeclaredSiteAreNotReported(): void
+    {
+        [$seedResult, $result] = $this->seed($this->parse([
+            'identifier' => 'translated',
+            'title' => 'A translated page tree with a site',
+            'scenarios' => [$this->scenarioPath('TranslatedSiteRootScenario.yaml')],
+            'sites' => [['identifier' => 'multilingual', 'rootPage' => 720]],
+        ]));
+
+        $rootPage = (int)$seedResult->writtenUid('pages', 720);
+        $aboutPage = (int)$seedResult->writtenUid('pages', 730);
+        $this->assertSame(
+            ['pid' => 0, 'sys_language_uid' => 1, 'l10n_parent' => $rootPage, 'is_siteroot' => 1],
+            $this->pageLocation((int)$seedResult->writtenUid('pages', 721)),
+        );
+        $this->assertSame(
+            ['pid' => 0, 'sys_language_uid' => 2, 'l10n_parent' => $rootPage, 'is_siteroot' => 1],
+            $this->pageLocation((int)$seedResult->writtenUid('pages', 722)),
+        );
+        $this->assertSame(
+            ['pid' => $rootPage, 'sys_language_uid' => 1, 'l10n_parent' => $aboutPage, 'is_siteroot' => 1],
+            $this->pageLocation((int)$seedResult->writtenUid('pages', 731)),
+        );
+        $this->assertSame(
+            [0, 1, 2],
+            array_keys($this->get(SiteFinder::class)->getSiteByPageId($rootPage)->getLanguages()),
+        );
+        $this->assertSame(['multilingual'], $result->writtenSites);
+        $this->assertSame([], $result->uncoveredSiteRoots);
+    }
+
+    /**
+     * Site roots with translations that no configuration covers are reported
+     * once each, by their own uid, and their translations are not. A site
+     * configuration names the translated page, and the translations are
+     * reachable through it as soon as it has one.
+     */
+    #[Test]
+    public function uncoveredSiteRootsAreReportedWithoutTheirTranslations(): void
+    {
+        [$seedResult, $result] = $this->seed($this->parse([
+            'identifier' => 'translated',
+            'title' => 'A translated page tree without a site',
+            'scenarios' => [$this->scenarioPath('TranslatedSiteRootScenario.yaml')],
+        ]));
+
+        $this->assertSame(
+            [$seedResult->writtenUid('pages', 720), $seedResult->writtenUid('pages', 730)],
+            $result->uncoveredSiteRoots,
+        );
+    }
+
+    /**
+     * A translation of a page the run did not write is not reported, although
+     * it sits on the page tree root, carries the `is_siteroot` of its original,
+     * and that original is covered by no site.
+     *
+     * The warning says that suppressing the automatic site configuration left
+     * a seeded page tree without a frontend. For an original that existed
+     * before the run, that is not true, and `CreateSiteConfiguration` would
+     * not have acted on the translation either.
+     */
+    #[Test]
+    public function aTranslationOfAPageTheRunDidNotWriteIsNotReported(): void
+    {
+        $this->importCSVDataSet(dirname(__DIR__, 2) . '/Fixtures/Database/ExistingUncoveredSiteRoot.csv');
+
+        [$seedResult, $result] = $this->seed($this->parse([
+            'identifier' => 'translation-only',
+            'title' => 'A translation of an existing page',
+            'scenarios' => [$this->scenarioPath('TranslationOfAnExistingPageScenario.yaml')],
+        ]));
+
+        $this->assertSame(
+            ['pid' => 0, 'sys_language_uid' => 1, 'l10n_parent' => 20, 'is_siteroot' => 1],
+            $this->pageLocation((int)$seedResult->writtenUid('pages', 740)),
+        );
         $this->assertSame([], $result->uncoveredSiteRoots);
     }
 
