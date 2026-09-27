@@ -66,10 +66,12 @@ interface FileImporterInterface
      *   unusable for it: renaming fills the storage with `placeholder_01.svg`,
      *   `placeholder_02.svg`, … on every run, and cancelling throws an
      *   `ExistingTargetFileNameException` the second time a seed is applied.
-     * - The source file is **kept**. `addFile()` defaults to removing it (12.4:
-     *   ResourceStorage.php:1261, 13.4: ResourceStorage.php:1312), which would
-     *   move the seed file out of the extension directory it was read from - a
-     *   seed that destroys its own source the first time it runs.
+     * - The file at `$localFilePath` is **kept**. `addFile()` defaults to
+     *   removing it (12.4: ResourceStorage.php:1261, 13.4:
+     *   ResourceStorage.php:1312). The seeder hands over a temporary copy of
+     *   the seed file rather than the seed file itself, and removes that copy
+     *   in a `finally` of its own, so keeping it here leaves one place that
+     *   owns its lifetime, on success and on failure alike.
      *
      * `$targetFolder` is expected to belong to `$storage`. `addFile()` itself
      * makes that assumption: it only reads the folder's identifier and never

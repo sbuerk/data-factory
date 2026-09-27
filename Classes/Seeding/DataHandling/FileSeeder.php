@@ -23,14 +23,25 @@ use TYPO3\CMS\Core\Utility\PathUtility;
  * `copy()` exists on disk and does not exist for TYPO3, so nothing can
  * reference it - and nothing says why.
  *
- * Three details of the copy are worth naming, each of them easy to get wrong
+ * Four details of the copy are worth naming, each of them easy to get wrong
  * and none of them loud about it:
  *
- * - **`ResourceStorage::addFile()` moves by default.** Its `$removeOriginal`
- *   argument defaults to `true` (12.4: ResourceStorage.php:1261, 13.4:
- *   ResourceStorage.php:1312), which would delete the source out of the
- *   package shipping the seed. It is passed as `false` here, and a functional
- *   test asserts that the source survived.
+ * - **`ResourceStorage::addFile()` may rewrite the file it is given.** It
+ *   dispatches `BeforeFileAddedEvent` with the path it was handed, and the
+ *   core's `Resource\Security\SvgEventListener` sanitizes an SVG at that path
+ *   in place, on a first import and on one replacing the stored file alike.
+ *   `addFile()` treats that path as a file it may consume. Here it would be a
+ *   file of the package shipping the seed, so the storage is handed a
+ *   temporary copy instead, see {@see self::temporaryPathFor()}. The stored
+ *   file is sanitized all the same, and the package stays as it was committed
+ *   or installed.
+ * - **`addFile()` moves by default.** Its `$removeOriginal` argument
+ *   defaults to `true` (12.4: ResourceStorage.php:1261, 13.4:
+ *   ResourceStorage.php:1312). The source is out of its reach since it only
+ *   gets the copy, and the implementations of {@see FileImporterInterface}
+ *   pass `false`, which keeps it that way for the copy as well: the `finally`
+ *   around the call is then the one place that removes it, on success and on
+ *   failure alike.
  * - **The conflict mode is core version aware**, which is why the call itself
  *   is not in this class. TYPO3 v13 introduced the native enum
  *   {@see \TYPO3\CMS\Core\Resource\Enum\DuplicationBehavior} (#101151) and
@@ -69,21 +80,30 @@ final class FileSeeder
         foreach ($definition->files as $file) {
             $source = $this->resolveSource($definition, $file);
             $storage = $this->resolveStorage($definition, $file);
+            // The name comes from the definition or the source, never from the
+            // copy, which carries a generated one. An empty declared name counts
+            // as none: `addFile()` would fall back to the basename of the path
+            // it is handed, which is the copy.
+            $targetFileName = $file->name !== null && $file->name !== '' ? $file->name : basename($source);
 
+            $copy = '';
             $evaluatePermissions = $storage->getEvaluatePermissions();
             $storage->setEvaluatePermissions(false);
             try {
+                $copy = $this->temporaryPathFor($targetFileName);
+                $this->copySource($definition, $file, $source, $copy);
                 // Inside the suspension as well: creating the target folder
                 // evaluates the same permissions the copy does.
                 $folder = $this->resolveFolder($storage, $file->folder);
                 $addedFile = $this->fileImporter->addFileReplacingExisting(
                     $storage,
-                    $source,
+                    $copy,
                     $folder,
-                    $file->name ?? basename($source),
+                    $targetFileName,
                 );
             } finally {
                 $storage->setEvaluatePermissions($evaluatePermissions);
+                GeneralUtility::unlink_tempfile($copy);
             }
 
             $uids[$file->identifier] = $addedFile->getUid();
@@ -131,6 +151,56 @@ final class FileSeeder
         }
 
         return $source;
+    }
+
+    /**
+     * A temporary file the source is copied to, which is what the storage is
+     * handed instead of the source itself.
+     *
+     * The file carries the extension of the name it is stored under.
+     * `SvgTypeCheck::forFilePath()` decides whether `SvgEventListener`
+     * sanitizes a file by the extension of the path it is given, or else by
+     * the MIME type detected from its content. The resource consistency check
+     * `addFile()` runs after the listeners compares the MIME type detected
+     * from the content with the extension of the target name. An SVG that
+     * content detection does not recognize, one opening with a comment and no
+     * XML declaration for instance, which it takes for `text/html`, is
+     * therefore sanitized only because of the extension, and it passes the
+     * check only because the sanitized output starts with an XML declaration.
+     * A copy without the extension would be left unsanitized and refused.
+     *
+     * The file is created in the `transient/` directory of the var path by
+     * `GeneralUtility::tempnam()`, which is where
+     * `GeneralUtility::unlink_tempfile()` agrees to delete it from again. The
+     * caller does that in the `finally` around the copy and `addFile()`, and
+     * holds the path before either of them runs, so a failure in any of them
+     * leaves nothing behind.
+     */
+    private function temporaryPathFor(string $targetFileName): string
+    {
+        $extension = pathinfo($targetFileName, PATHINFO_EXTENSION);
+
+        return GeneralUtility::tempnam('data-factory-', $extension !== '' ? '.' . $extension : '');
+    }
+
+    /**
+     * @throws SeedingFailedException
+     */
+    private function copySource(SeedDefinition $definition, SeedFile $file, string $source, string $copy): void
+    {
+        if (!copy($source, $copy)) {
+            throw new SeedingFailedException(
+                sprintf(
+                    'The file "%s" of the seed definition "%s" could not be copied from "%s" to "%s" before it is'
+                    . ' added to the storage.',
+                    $file->identifier,
+                    $definition->identifier,
+                    $source,
+                    $copy,
+                ),
+                1787076003,
+            );
+        }
     }
 
     private function resolveRelativeSource(SeedDefinition $definition, SeedFile $file): string
