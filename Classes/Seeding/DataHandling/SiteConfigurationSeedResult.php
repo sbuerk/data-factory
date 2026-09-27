@@ -32,11 +32,14 @@ final class SiteConfigurationSeedResult
      * @param list<string> $writtenSites The identifiers of the site
      *        configurations written, in the order the definition declares them.
      * @param list<int> $uncoveredSiteRoots The uids of the seeded pages that
-     *        are site roots - on the page tree root, or carrying `is_siteroot` -
-     *        and that no site configuration covers after the run, in ascending
-     *        order. Empty is the normal case and the one that needs no
-     *        reporting. A uid rather than a name because a scenario record has
-     *        no symbolic identifier: what it declares is the uid itself.
+     *        are site roots, which means on the page tree root or carrying
+     *        `is_siteroot` and translating no other page, and that no site
+     *        configuration covers after the run, in ascending order. A
+     *        translation is never one of them: whether it is reachable is
+     *        decided by its original and the languages of the original's site.
+     *        Empty is the normal case and the one that needs no reporting. A
+     *        uid rather than a name because a scenario record has no symbolic
+     *        identifier: what it declares is the uid itself.
      */
     public function __construct(
         public readonly array $writtenSites = [],

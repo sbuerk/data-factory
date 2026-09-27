@@ -258,19 +258,31 @@ logged where it is found: the seeder has no output channel, the command has, and
 warning naming the root pages is the difference between *"this seed is
 incomplete"* and *"the frontend is broken and nothing said why"*.
 
-Three details decide what the report is worth:
+Four details decide what the report is worth:
 
 - **"Site root" is the core's definition, read back out of the database** rather
   than derived from the definition: a page on the page tree root or carrying
-  `is_siteroot`, of a page type `CreateSiteConfiguration` would have acted on
-  (`DOKTYPE_DEFAULT`, `DOKTYPE_LINK`, `DOKTYPE_SHORTCUT`, repeated from its
-  `$allowedPageTypes`, which is `[DOKTYPE_DEFAULT, DOKTYPE_LINK,
-  DOKTYPE_SHORTCUT]` on 12.4.45 and 13.4.34 alike — the whole
-  `processDatamap_afterDatabaseOperations()` differs between the two versions
-  only in which writer it reaches for). Reading it back makes the
-  answer true for the record that was actually written, defaults and all — and
-  keeping the page-type list means a seeded sysfolder on the page tree root is not
-  reported as a broken frontend.
+  `is_siteroot` that translates no other page, of a page type
+  `CreateSiteConfiguration` would have acted on (`DOKTYPE_DEFAULT`,
+  `DOKTYPE_LINK`, `DOKTYPE_SHORTCUT`, repeated from its `$allowedPageTypes`,
+  which is `[DOKTYPE_DEFAULT, DOKTYPE_LINK, DOKTYPE_SHORTCUT]` on 12.4.45 and
+  13.4.34 alike — the whole `processDatamap_afterDatabaseOperations()` differs
+  between the two versions only in which writer it reaches for and in one
+  `writelog()` argument). Reading it back makes the answer true for the record
+  that was actually written, defaults and all — and keeping the page-type list
+  means a seeded sysfolder on the page tree root is not reported as a broken
+  frontend.
+- **A translation is never a site root.** It is a `pages` row of its own on the
+  `pid` of its original, and `is_siteroot` is `l10n_mode` `exclude`, so
+  `DataHandler` copies it from the original. A translation therefore meets the
+  page tree root and `is_siteroot` conditions whenever its original does.
+  `CreateSiteConfiguration` passes it over by its `l10n_parent`, and so does the
+  report: `SiteFinder::getSiteByPageId()` asked with the uid of the translation
+  of a site's root page does not find that site, and whether a translation is
+  reachable is decided by its original and the languages of the original's site
+  anyway. A site root with translations that no site covers is reported once, by
+  its own uid, and its translations are not. A translation of a page the run
+  did not write is not reported at all.
 - **Coverage is asked as `SiteFinder::getSiteByPageId()`**, not as
   `getSiteByRootPageId()`. The question is whether a frontend can render the tree,
   not whether the page is a site root of its own: a page seeded with `is_siteroot`

@@ -1,0 +1,25 @@
+#
+# A site in three languages: the translations of its root page are reachable
+# through this site, in the languages declared here, and not through a site of
+# their own.
+#
+base: 'https://multilingual.example.org/'
+languages:
+  -
+    title: English
+    enabled: true
+    languageId: 0
+    base: /
+    locale: en_US.UTF-8
+  -
+    title: German
+    enabled: true
+    languageId: 1
+    base: /de/
+    locale: de_DE.UTF-8
+  -
+    title: French
+    enabled: true
+    languageId: 2
+    base: /fr/
+    locale: fr_FR.UTF-8
