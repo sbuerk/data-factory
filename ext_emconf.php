@@ -9,7 +9,7 @@
 $EM_CONF['data_factory'] = [
     'title' => 'TYPO3 Data Factory',
     'description' => 'Seeds pages, records, files and site configurations into a TYPO3 installation from YAML definitions shipped by extensions.',
-    'version' => '2.0.1',
+    'version' => '2.0.2',
     'category' => 'misc',
     // Describes the release line, not the working tree, and no tooling rewrites
     // it — "setVersion.sh" only touches 'version'. It is not cosmetic either:
