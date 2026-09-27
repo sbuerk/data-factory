@@ -12,6 +12,7 @@ use SBUERK\DataFactory\Seeding\Exception\InvalidSeedDefinitionException;
 use SBUERK\DataFactory\Seeding\Exception\SeedingFailedException;
 use SBUERK\DataFactory\Seeding\Parser\SeedDefinitionParser;
 use SBUERK\DataFactory\Tests\Functional\AbstractFunctionalTestCase;
+use TYPO3\CMS\Core\Core\Environment;
 use TYPO3\CMS\Core\Resource\StorageRepository;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
@@ -26,10 +27,13 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  * exactly the same place and does not exist for TYPO3, so nothing can
  * reference it and nothing says why.
  *
- * The second silent failure covered here is the direction of the copy.
- * `ResourceStorage::addFile()` *moves* by default, which would delete the
- * source out of the package shipping the seed - once, quietly, and only on the
- * machine that ran the seeder.
+ * The other silent failures covered here are what `ResourceStorage::addFile()`
+ * does to the file it is handed. It *moves* that file by default, and the core
+ * sanitizes an SVG in it in place, so handing it the source would delete or
+ * rewrite a file of the package shipping the seed, once, quietly, and only on
+ * the machine that ran the seeder. The seeder hands it a temporary copy
+ * instead, and the tests below assert that the source stays where it is and
+ * as it is, and that a stored SVG is sanitized all the same.
  *
  * Every row is read back through the `QueryBuilder`. Hand written SQL would
  * pass here and fail on PostgreSQL, which folds an unquoted identifier to lower
@@ -189,6 +193,51 @@ final class FileSeedingTest extends AbstractFunctionalTestCase
     }
 
     /**
+     * A copy of an unsanitized fixture inside the test instance, which is the
+     * source the SVG tests seed from.
+     *
+     * Seeding the fixture itself would rewrite a file of this repository the
+     * moment the behaviour under test regresses. The copy only ever lives in
+     * the test instance instead.
+     */
+    private function unsanitizedSvgSource(string $fixture = 'unsanitized.svg'): string
+    {
+        $directory = $this->instancePath . '/seed-sources';
+        GeneralUtility::mkdir_deep($directory);
+        $source = $directory . '/' . $fixture;
+        copy($this->fixtureDirectory() . '/Files/' . $fixture, $source);
+        $this->assertStringContainsString('<script>', (string)file_get_contents($source));
+
+        return $source;
+    }
+
+    private function unsanitizedSvgDefinition(string $source): SeedDefinition
+    {
+        return $this->definition(
+            [new SeedFile(identifier: 'unsanitized', source: $source, folder: 'seed-files')],
+            'svg-seeding',
+        );
+    }
+
+    private function assertSanitizedSvg(string $file): void
+    {
+        $content = (string)file_get_contents($file);
+        $this->assertStringContainsString('<rect', $content);
+        $this->assertStringNotContainsString('<script', $content);
+        $this->assertStringNotContainsString('onload', $content);
+    }
+
+    /**
+     * The temporary copies the seeder left behind, which should be none.
+     *
+     * @return list<string>
+     */
+    private function temporaryCopies(): array
+    {
+        return glob(Environment::getVarPath() . '/transient/data-factory-*') ?: [];
+    }
+
+    /**
      * A `source` that is neither `EXT:` nor absolute resolves against the
      * directory holding the set, which is what lets a set be moved or renamed
      * without touching its paths.
@@ -236,10 +285,10 @@ final class FileSeedingTest extends AbstractFunctionalTestCase
     }
 
     /**
-     * `ResourceStorage::addFile()` *moves* by default - its `$removeOriginal`
-     * argument defaults to `true` - which would delete the file out of the
-     * package shipping the seed, once, silently, and only on the machine that
-     * ran the seeder.
+     * `ResourceStorage::addFile()` *moves* by default, because its
+     * `$removeOriginal` argument defaults to `true`. The seeder hands it a
+     * temporary copy, so the source stays where it is. This goes red as soon
+     * as the source itself is handed over with that default.
      */
     #[Test]
     public function theSourceFilesStayWhereTheDefinitionDeclaresThem(): void
@@ -250,6 +299,92 @@ final class FileSeedingTest extends AbstractFunctionalTestCase
 
         $this->assertFileExists($this->fixtureDirectory() . '/Files/placeholder.svg');
         $this->assertFileExists($this->fixtureDirectory() . '/Files/placeholder-portrait.svg');
+    }
+
+    /**
+     * An SVG is sanitized on its way into the storage, and the source it came
+     * from is left as it was.
+     *
+     * The core's `SvgEventListener` sanitizes the path `addFile()` is given,
+     * in place. The first assertion is the one that goes red when that path is
+     * the source itself, the other two are what make sure the fix did not
+     * simply get the sanitizer out of the way.
+     */
+    #[Test]
+    public function anSvgIsSanitizedInTheStorageAndLeftUnchangedAtItsSource(): void
+    {
+        $this->createDefaultStorage();
+        $source = $this->unsanitizedSvgSource();
+        $hash = sha1_file($source);
+
+        $this->subject()->seed($this->unsanitizedSvgDefinition($source));
+
+        $this->assertSame($hash, sha1_file($source));
+        $this->assertSanitizedSvg($this->instancePath . '/fileadmin/seed-files/unsanitized.svg');
+        $this->assertSame([], $this->temporaryCopies());
+    }
+
+    /**
+     * The same holds for an import replacing a file stored by an earlier one:
+     * `addFile()` dispatches `BeforeFileAddedEvent` before it looks at the
+     * conflict mode, so the replacing import runs through the same listener.
+     *
+     * Between the two runs the source is written back unsanitized and with a
+     * different fill, so the second run is asserted on its own rather than on
+     * what the first one did, and the stored file shows that it was replaced
+     * rather than left from the first run.
+     */
+    #[Test]
+    public function anSvgReplacingAStoredOneIsSanitizedAndLeftUnchangedAtItsSource(): void
+    {
+        $this->createDefaultStorage();
+        $source = $this->unsanitizedSvgSource();
+        $stored = $this->instancePath . '/fileadmin/seed-files/unsanitized.svg';
+        $this->subject()->seed($this->unsanitizedSvgDefinition($source));
+        $this->assertStringNotContainsString('#000000', (string)file_get_contents($stored));
+        $unsanitized = (string)file_get_contents($this->fixtureDirectory() . '/Files/unsanitized.svg');
+        file_put_contents($source, str_replace('#d7d7d7', '#000000', $unsanitized));
+        $hash = sha1_file($source);
+
+        $this->subject()->seed($this->unsanitizedSvgDefinition($source));
+
+        $this->assertSame($hash, sha1_file($source));
+        $this->assertStringContainsString('#000000', (string)file_get_contents($stored));
+        $this->assertSanitizedSvg($stored);
+        $this->assertCount(1, $this->indexedFiles());
+        $this->assertSame([], $this->temporaryCopies());
+    }
+
+    /**
+     * An SVG that only its extension identifies as one is sanitized as well.
+     *
+     * Content detection takes an SVG opening with a comment and no XML
+     * declaration for `text/html`. That it does not take it for an SVG
+     * is what the first assertion makes sure of, so the fixture keeps
+     * testing this case on whatever version of the detection runs it.
+     * `SvgTypeCheck` recognizes it by the extension of the path it is
+     * given, and the sanitized output starts with an XML declaration,
+     * which is what then lets the resource consistency check accept the
+     * content under its `.svg` name. This is the case that goes red when
+     * the temporary copy does not carry the extension: the import then
+     * fails with "Resource consistency check failed".
+     */
+    #[Test]
+    public function anSvgRecognizedByItsExtensionOnlyIsSanitizedInTheStorage(): void
+    {
+        $this->createDefaultStorage();
+        $source = $this->unsanitizedSvgSource('unsanitized-exported.svg');
+        $this->assertNotContains(
+            (new \finfo())->file($source, FILEINFO_MIME_TYPE),
+            ['image/svg', 'image/svg+xml', 'application/svg', 'application/svg+xml'],
+        );
+        $hash = sha1_file($source);
+
+        $this->subject()->seed($this->unsanitizedSvgDefinition($source));
+
+        $this->assertSame($hash, sha1_file($source));
+        $this->assertSanitizedSvg($this->instancePath . '/fileadmin/seed-files/unsanitized-exported.svg');
+        $this->assertSame([], $this->temporaryCopies());
     }
 
     /**
@@ -312,6 +447,38 @@ final class FileSeedingTest extends AbstractFunctionalTestCase
 
         $this->assertSame('/seed-files/a-different-name.svg', (string)$file['identifier']);
         $this->assertSame('a-different-name.svg', (string)$file['name']);
+    }
+
+    /**
+     * An empty declared name counts as no name, and the file is stored under
+     * the basename of its source.
+     *
+     * `addFile()` falls back to the basename of the path it is handed for an
+     * empty target name. That path is a temporary copy with a generated name
+     * and no extension, so the fallback has to happen before the copy is
+     * handed over. Otherwise the resource consistency check refuses the import
+     * where `security.system.enforceAllowedFileExtensions` is enabled, as in
+     * the test instance, and the file lands under the generated name of the
+     * copy where it is not.
+     */
+    #[Test]
+    public function anEmptyDeclaredNameFallsBackToTheBasenameOfTheSource(): void
+    {
+        $this->createDefaultStorage();
+
+        $uids = $this->subject()->seed($this->definition([
+            new SeedFile(
+                identifier: 'unnamed',
+                source: 'Files/placeholder.svg',
+                folder: 'seed-files',
+                name: '',
+            ),
+        ]));
+
+        $file = $this->indexedFiles()[$uids['unnamed']];
+
+        $this->assertSame('/seed-files/placeholder.svg', (string)$file['identifier']);
+        $this->assertSame('placeholder.svg', (string)$file['name']);
     }
 
     /**
