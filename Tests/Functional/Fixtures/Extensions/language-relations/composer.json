@@ -1,0 +1,18 @@
+{
+    "name": "tests/language-relations",
+    "description": "Fixture extension providing a language aware inline child with two inline parents: a content element and a group whose relation column is excluded from translation.",
+    "type": "typo3-cms-extension",
+    "license": "GPL-2.0-or-later",
+    "version": "1.0.0-dev",
+    "require": {
+        "typo3/cms-core": "*"
+    },
+    "extra": {
+        "typo3/cms": {
+            "extension-key": "tests_language_relations",
+            "Package": {
+                "providesPackages": []
+            }
+        }
+    }
+}
