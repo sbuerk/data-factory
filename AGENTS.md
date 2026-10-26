@@ -88,24 +88,24 @@ thing to get right:
   placed, which no set author can write down. That, and only that, is why
   `references:` is a key of `config.yml`.
 - **The port is not a copy any more, and the list of differences is finite.**
-  Nine divergences from `typo3/testing-framework` 9.6.1 are deliberate; seven
+  Ten divergences from `typo3/testing-framework` 9.6.1 are deliberate; seven
   of them fix a defect of the upstream engine, among them the declared order of
   every table other than `pages`, `{action: 'discard'}` and the workspace a
-  version variant lands in. Each is stated on
+  version variant lands in, and one writes the translations of a round after
+  its default language, which TYPO3 14.3.10 needs. Each is stated on
   [The deliberate divergences](docs/architecture/scenario-engine.md#the-deliberate-divergences)
-  and pinned by a test in `UpstreamConformanceTest` that runs both classes and
-  asserts what each produces. **Nothing else may diverge**: the two that
-  ordinary definitions reach are modelled onto the upstream side so all four
-  observables stay under one `assertSame()`, and a tenth divergence would make
-  that assertion fail rather than pass quietly.
-- **Two behaviours of the format only appear once a real `DataHandler` has
-  run**, and neither is visible in a data map. A translation of a translation
-  is built with the right `l10n_source` and reaches the database with the
-  original in it - a TYPO3 Core defect in `processRemapStack()`. And a
-  translated **page** is positioned by `nodeColumnName`, never by
-  `parentColumnName`, so a node entity without a node column produces a
-  translation whose `pid` falls back to `defaultValues` - usually `0`. Both are
-  pinned by functional tests and documented on
+  and pinned by a test: those of the factory in `UpstreamConformanceTest`,
+  which runs both classes and asserts what each produces, those of the writer
+  by a functional test. **Nothing else may diverge**: the two that ordinary
+  definitions reach are modelled onto the upstream side so all four
+  observables stay under one `assertSame()`, and a further divergence of the
+  factory would make that assertion fail rather than pass quietly.
+- **One behaviour of the format only appears once a real `DataHandler` has
+  run**, and it is not visible in a data map: a translated **page** is
+  positioned by `nodeColumnName`, never by `parentColumnName`, so a node
+  entity without a node column produces a translation whose `pid` falls back
+  to `defaultValues` - usually `0`. It is pinned by a functional test and
+  documented on
   [The scenario engine](docs/architecture/scenario-engine.md) and in
   [Documentation/Configuration](Documentation/Configuration/Index.rst).
 - **Two traps of the upstream engine cost real debugging time.** The `'*'`

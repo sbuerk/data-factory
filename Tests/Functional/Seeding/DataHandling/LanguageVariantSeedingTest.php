@@ -119,26 +119,25 @@ final class LanguageVariantSeedingTest extends AbstractFunctionalTestCase
     }
 
     #[Test]
-    public function aTranslationOfATranslationLosesThatSourceOnTheWayIntoTheDatabase(): void
+    public function aTranslationOfATranslationKeepsTheSourceItDeclares(): void
     {
         $this->seed();
 
-        // "l10n_source" is a "passthrough" column, so a "NEW" identifier in it
-        // is put on the remap stack by
-        // "DataHandler::checkValueForInternalReferences()" with no "func" to
-        // resolve it. "DataHandler::processRemapStack()" declares "$newValue"
-        // once, outside its loop, and never resets it - an entry without a
-        // "func" therefore writes whatever the previous entry produced, which
-        // for a translation is always the "l10n_parent" that was remapped
-        // immediately before it. Both columns end up on the original.
+        // "l10n_source" is a "passthrough" column. Written in the same run as
+        // its source, a "NEW" identifier in it went on the remap stack of
+        // "DataHandler" with no "func" to resolve it, and
+        // "DataHandler::processRemapStack()", which never resets "$newValue",
+        // wrote the "l10n_parent" remapped immediately before it. TYPO3 Core
+        // carries that as a "@todo" on the nested "languageVariants" of its
+        // own "CommonScenario.yaml".
         //
-        // TYPO3 Core carries the same observation as a "@todo does not work
-        // due to a bug in DataHandler's remap stack for l10n_source" on the
-        // nested "languageVariants" of its own "CommonScenario.yaml".
+        // The writer writes a translation one run after its source, so the
+        // identifier is substituted by the uid of the source before the run,
+        // and the remap stack never sees it.
         $this->assertSame(100, $this->column('pages', 'l10n_parent')[102]);
-        $this->assertSame(100, $this->column('pages', 'l10n_source')[102]);
+        $this->assertSame(101, $this->column('pages', 'l10n_source')[102]);
         $this->assertSame(300, $this->column('tt_content', 'l18n_parent')[302]);
-        $this->assertSame(300, $this->column('tt_content', 'l10n_source')[302]);
+        $this->assertSame(301, $this->column('tt_content', 'l10n_source')[302]);
     }
 
     #[Test]

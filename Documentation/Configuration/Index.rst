@@ -427,17 +427,12 @@ Three things follow from how the variants are written:
 
     ..  note::
 
-        That chain does **not** survive the write. :sql:`l10n_source` is a
-        :yaml:`passthrough` column, so the reference to a record that does not
-        exist yet is resolved on :php:`DataHandler`'s remap stack - and an
-        entry of that stack without a resolver reuses the value the entry
-        before it produced, which for a translation is always the
-        :sql:`l10n_parent` that was resolved immediately before. A translation
-        of a translation therefore ends up with both columns on the original.
-
-        TYPO3 Core's own scenario fixture carries the same observation as a
-        :yaml:`@todo`. Declare :sql:`l10n_source` explicitly on the variant if
-        the chain matters - a declared value wins, as the next point says.
+        The translations of a seed set are written after its records of the
+        default language and of "all languages", and a translation of a
+        translation after the translation it was made from. That keeps the
+        chain, and it keeps a translation whose record has a second inline
+        parent in its language on TYPO3 14.3.10 and later, see
+        :ref:`important-translations-written-after-the-default-language`.
 *   **A declared value still wins.** A variant declaring :sql:`l10n_source`
     itself overrides what the seeder computed.
 *   **The language itself is an ordinary field.** :yaml:`language` is only a

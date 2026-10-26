@@ -407,16 +407,14 @@ Items of the same entity, with `languageColumnNames` filled from the ancestor
 chain. They nest: a variant of a variant carries both ancestors, which is what
 distinguishes `l10n_parent` from `l10n_source`.
 
-That distinction is real in the data map and **does not survive the write**.
-`l10n_source` is a `passthrough` column, so a `NEW…` value in it goes on
-`DataHandler`'s remap stack with no resolver, and `processRemapStack()` declares
-`$newValue` once outside its loop and never resets it — an entry without a
-resolver writes whatever the entry before it produced, which for a translation
-is always the `l10n_parent` resolved immediately before. A translation of a
-translation therefore reaches the database with both columns on the original.
-TYPO3 Core carries the same observation as a `@todo` on the nested
-`languageVariants` of its own `CommonScenario.yaml`. Declare `l10n_source`
-explicitly on the variant when the chain matters — a declared value wins.
+That distinction survives the write because the writer writes a translation
+one run of `DataHandler` after the record it was made from, so the source is a
+uid before the run starts. In one run, as upstream writes it, `l10n_source`
+reached the database on the original: a `NEW…` value in that `passthrough`
+column goes on the remap stack of `DataHandler` without a resolver, and
+`processRemapStack()` never resets `$newValue`. TYPO3 Core carries that as a
+`@todo` on the nested `languageVariants` of its own `CommonScenario.yaml`. See
+[Translations written after the default language](../architecture/scenario-engine.md#translations-written-after-the-default-language).
 Pinned by `LanguageVariantSeedingTest`.
 
 The node pointer differs by entity kind, and deliberately. For a **node** entity

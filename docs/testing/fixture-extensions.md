@@ -5,36 +5,39 @@ A *fixture extension* is a minimal TYPO3 extension that exists only inside
 and is loaded by functional tests to provide test doubles, additional TCA,
 service overrides or a plugin to render.
 
-This repository ships six:
+This repository ships seven:
 
-| Fixture            | Extension key            | Provides                                                                                                                                                |
-|--------------------|--------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `example-fixture`  | `tests_example_fixture`  | The plugin, model and dummy service the mechanism itself is proven with.                                                                                |
-| `seeds-demo`       | `tests_seeds_demo`       | Two seed sets and four site configuration templates, plus a directory below `Configuration/DataFactory/` that is not a set.                             |
-| `seeds-collision`  | `tests_seeds_collision`  | A seed set claiming the identifier of `seeds-demo`, so a collision can be tested.                                                                       |
-| `seeds-import`     | `tests_seeds_import`     | The set `data-factory:import` is driven with — declared uids, a file, a reference, a site, an `imports` — and one that is discoverable and unparseable. |
-| `inline-relations` | `tests_inline_relations` | A content element with an inline relation to an item table, which carries a file field and an inline relation to a link table of its own.               |
-| `file-fields`      | `tests_file_fields`      | A content element with a `type => 'file'` column and a CType of its own.                                                                                |
+| Fixture              | Extension key              | Provides                                                                                                                                                |
+|----------------------|----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `example-fixture`    | `tests_example_fixture`    | The plugin, model and dummy service the mechanism itself is proven with.                                                                                |
+| `seeds-demo`         | `tests_seeds_demo`         | Two seed sets and four site configuration templates, plus a directory below `Configuration/DataFactory/` that is not a set.                             |
+| `seeds-collision`    | `tests_seeds_collision`    | A seed set claiming the identifier of `seeds-demo`, so a collision can be tested.                                                                       |
+| `seeds-import`       | `tests_seeds_import`       | The set `data-factory:import` is driven with — declared uids, a file, a reference, a site, an `imports` — and one that is discoverable and unparseable. |
+| `inline-relations`   | `tests_inline_relations`   | A content element with an inline relation to an item table, which carries a file field and an inline relation to a link table of its own.               |
+| `language-relations` | `tests_language_relations` | A language aware inline child with two inline parents, a content element and a group whose select on the child is `l10n_mode` `exclude`.                |
+| `file-fields`        | `tests_file_fields`        | A content element with a `type => 'file'` column and a CType of its own.                                                                                |
 
 A fixture providing seed data needs nothing but a `composer.json` and its
 `Configuration/DataFactory/<name>/config.yml` — no `Classes/`, no autoload section,
 no `ext_localconf.php`. The plugin adopts what is there and says so for what is
-not. `file-fields` and `inline-relations` are the same thing for TCA: a
-`composer.json` and `Configuration/TCA/`, with no PHP class in them at all.
+not. `file-fields`, `inline-relations` and `language-relations` are the same
+thing for TCA: a `composer.json` and `Configuration/TCA/`, with no PHP class in
+them at all.
 
-The two TCA fixtures exist so that seeding is proven against a **real relation**
+The three TCA fixtures exist so that seeding is proven against a **real relation**
 rather than against a data map. Which columns tie an inline child to its parent
 comes from the TCA of the *parent field* and never from the child, and a file
 field that a core version happens to ship on `tt_content` today is free to
 change tomorrow — neither is the subject of a test about seeding, so both are
 provided here.
 
-Both are genuinely exercised, and by a test each:
+All three are genuinely exercised, and by a test each:
 
-| Fixture            | Test                                                                                                     | Proves                                                                                                                      |
-|--------------------|----------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| `file-fields`      | [`FileReferenceSeedingTest`](../../Tests/Functional/Seeding/DataHandling/FileReferenceSeedingTest.php)   | The `references:` of a `config.yml` become `sys_file_reference` rows with the structural columns, the values and the order. |
-| `inline-relations` | [`InlineRelationSeedingTest`](../../Tests/Functional/Seeding/DataHandling/InlineRelationSeedingTest.php) | A scenario expresses an inline relation with nothing but declared ids, two levels deep, in the declared order.              |
+| Fixture              | Test                                                                                                         | Proves                                                                                                                           |
+|----------------------|--------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `file-fields`        | [`FileReferenceSeedingTest`](../../Tests/Functional/Seeding/DataHandling/FileReferenceSeedingTest.php)       | The `references:` of a `config.yml` become `sys_file_reference` rows with the structural columns, the values and the order.      |
+| `inline-relations`   | [`InlineRelationSeedingTest`](../../Tests/Functional/Seeding/DataHandling/InlineRelationSeedingTest.php)     | A scenario expresses an inline relation with nothing but declared ids, two levels deep, in the declared order.                   |
+| `language-relations` | [`LanguageRelationSeedingTest`](../../Tests/Functional/Seeding/DataHandling/LanguageRelationSeedingTest.php) | A translation keeps its language and its translation parent on TYPO3 14.3.10 when its second parent is written in the same seed. |
 
 The `tt_content` column of `file-fields` is `tx_testsfilefields_media` and its
 CType is `tests_file_fields_teaser`; `inline-relations` provides

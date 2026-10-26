@@ -1,0 +1,47 @@
+# A translated inline child whose second inline parent is not translated.
+#
+# Member 51 belongs to content element 21 and to group 61. Its translation 52
+# belongs to the translation 22 of the content element, and to group 61 as
+# well: the group of a member is "l10n_mode" "exclude", so a translation names
+# the group of its default language record. That is a valid record, and the
+# one an editor gets when translating the content element in the backend.
+#
+# TYPO3 14.3.10 aligns every inline child to the language of a parent that is
+# created in the run. Written in one run with group 61, member 52 became a
+# member of the default language without a translation parent.
+entitySettings:
+  '*':
+    nodeColumnName: 'pid'
+    columnNames: {id: 'uid', language: 'sys_language_uid'}
+    defaultValues: {pid: 0}
+  page:
+    isNode: true
+    tableName: 'pages'
+    parentColumnName: 'pid'
+    defaultValues: {doktype: 1, hidden: 0}
+  content:
+    tableName: 'tt_content'
+    languageColumnNames: ['l18n_parent', 'l10n_source']
+    columnNames: {title: 'header', type: 'CType'}
+    defaultValues: {hidden: 0}
+  group:
+    tableName: 'tx_testslanguagerelations_group'
+    languageColumnNames: ['l10n_parent', 'l10n_source']
+  member:
+    tableName: 'tx_testslanguagerelations_member'
+    languageColumnNames: ['l10n_parent', 'l10n_source']
+
+entities:
+  page:
+    - self: {id: 1, title: 'Root', slug: '/', is_siteroot: 1}
+      entities:
+        group:
+          - self: {id: 61, title: 'Group'}
+        content:
+          - self: {id: 21, title: 'Members', type: 'text', tx_testslanguagerelations_members: '51'}
+            languageVariants:
+              - self: {id: 22, title: 'Mitglieder', type: 'text', language: 1, tx_testslanguagerelations_members: '52'}
+        member:
+          - self: {id: 51, title: 'Member', group_uid: 61}
+            languageVariants:
+              - self: {id: 52, title: 'Mitglied', language: 1, group_uid: 61}

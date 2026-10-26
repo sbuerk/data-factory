@@ -90,9 +90,10 @@ dishonest about where they came from.
 
 ## The deliberate divergences
 
-There are nine. One is forced by PHP 8.5, one is additive - it changes nothing
-for a caller that does not use it - and the other seven are defects of the
-upstream engine that are fixed here rather than carried.
+There are ten. One is forced by PHP 8.5, one is additive - it changes nothing
+for a caller that does not use it - seven are defects of the upstream engine
+that are fixed here rather than carried, and one keeps a seed correct on a core
+release that changed what a single run of `DataHandler` writes.
 
 Every one of them is stated by a test in
 `Tests/Unit/Seeding/Scenario/UpstreamConformanceTest.php` that runs the same
@@ -369,6 +370,50 @@ divergence is invisible to every scenario file that exists today.
 `WorkspaceSeedingTest::twoWorkspacesEachGetAVersionOfTheSameRecord()` is the
 test that goes red without the reset.
 
+### Translations written after the default language
+
+`invokeFactory()` writes the data map of a workspace round in more than one run
+of `DataHandler`, where upstream writes it in one: the records of the default
+language and of "all languages" first, then the translations, and a translation
+of a translation after the translation it was made from. A translation is a
+record of a language aware table whose language field is above 0.
+
+TYPO3 14.3.10 gives every inline child the language of its parent when the
+parent is created in the run, changes its language or gets a new child (core
+#103970, "Inline children follow the language of their parent"), and it
+expects an inline child to have one parent. A child can have a second one: a
+contact that lists the role of its default language record in a select with
+`l10n_mode` `exclude`, which a role lists in an inline relation of its own.
+Its translation names that role as well. Written in one run, the role is new,
+the core aligns every child it lists, and the translation becomes a record of
+the default language without a translation parent. Written after the default
+language, the role exists and is left alone - which is what happens when an
+editor translates the record in the backend. TYPO3 13 aligns nothing, so the
+result there is the same as before.
+
+Two things follow from the runs and are handled where they are split:
+
+- **Positions across languages.** The factory positions a record behind the
+  one declared before it on the same page, and that can be a translation. A
+  record positioned behind a translation of a later run is positioned where
+  that translation was positioned instead, which is behind the record it
+  translates. The order of the records of one run does not change.
+- **The `NEW…` identifiers of an earlier run** - the translation parent and
+  source, the node a translated page is written next to - are substituted by
+  `updateDataMap()`, exactly as between two workspace rounds.
+
+The second one fixes a TYPO3 Core defect on the way. A translation of a
+translation used to reach the database with its `l10n_source` on the original,
+because a `NEW…` value in that `passthrough` column went on the remap stack of
+`DataHandler` without a resolver, and `processRemapStack()` never resets
+`$newValue`. Written one run after its source, the column holds a uid before
+the run starts, and the remap stack never sees it.
+
+`LanguageRelationSeedingTest` is the test that goes red without the runs, on
+TYPO3 14.3.10 and later, against the fixture extension `language-relations`.
+`LanguageVariantSeedingTest` asserts the source of a translation of a
+translation.
+
 ## What keeps the port honest
 
 `Tests/Unit/Seeding/Scenario/UpstreamConformanceTest.php` runs the same
@@ -455,17 +500,11 @@ inventory of every untested behaviour of the three classes. Five of those tests
 found defects that are now fixed - they are the divergences listed above, and
 each of them was shown to fail against the unfixed code before the fix went in.
 
-Two behaviours are pinned rather than fixed, because neither is engine
-behaviour:
+One behaviour is pinned rather than fixed, because it is not engine behaviour.
+A translation of a translation used to be the second one, until the writer
+started writing translations in runs of their own, see
+[Translations written after the default language](#translations-written-after-the-default-language).
 
-- **A translation of a translation loses its source.** The factory builds
-  `l10n_source` correctly, and `DataHandler::processRemapStack()` overwrites it:
-  `$newValue` is declared once outside the loop and never reset, so a remap
-  entry without a resolver - which is what a `passthrough` column such as
-  `l10n_source` produces - writes whatever the entry before it produced. For a
-  translation that is always the `l10n_parent` resolved immediately before it.
-  TYPO3 Core carries the same observation as a `@todo` on the nested
-  `languageVariants` of its own `CommonScenario.yaml`.
 - **A translated page follows its original only if the entity declares a node
   column.** `processLanguageVariantItem()` is called without a parent id, so
   `parentColumnName` never positions a variant; a node entity without
